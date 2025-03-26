@@ -12,9 +12,10 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 app = Flask(__name__)
 
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "AIzaSyBaeXW7iN1fvUVUlWk0DHsbZ6mCO2Noju0")
-genai.configure(api_key=GOOGLE_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
+API_KEY = os.getenv("API_KEY")
+CHAT_MODEL = os.getenv("CHAT_MODEL")
+genai.configure(api_key=API_KEY)
+model = genai.GenerativeModel(CHAT_MODEL)
 chat_sessions = {}
 
 
