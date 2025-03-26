@@ -12,7 +12,29 @@ Chatbot Telegram sử dụng các API xử lý ngôn ngữ tự nhiên, nhận d
 ## Cấu trúc dự án
 
 ```
-
+📦 project-root
+ ┣ 📂 data
+ ┃ ┣ 📂 chroma_db        # Dữ liệu ChromaDB
+ ┃ ┣ 📂 database         # Dữ liệu cơ sở dữ liệu
+ ┃ ┣ 📂 documents        # Tài liệu đầu vào
+ ┃ ┗ 📂 logs             # File logs
+ ┣ 📂 src
+ ┃ ┣ 📂 api              # Các API bên ngoài
+ ┃ ┣ 📂 bot              # Logic bot Telegram
+ ┃ ┣ 📂 core             # Các chức năng cốt lõi
+ ┃ ┣ 📂 db               # Xử lý cơ sở dữ liệu
+ ┃ ┣ 📂 document_processing # Xử lý tài liệu
+ ┃ ┣ 📂 manager          # Các lớp quản lý
+ ┃ ┣ 📄 __init__.py      # File khởi tạo package
+ ┃ ┗ 📄 utils.py         # Các tiện ích
+ ┣ 📄 1.pdf              # File PDF mẫu
+ ┣ 📄 app.py             # Điểm khởi chạy ứng dụng
+ ┣ 📄 config.py          # Cấu hình ứng dụng
+ ┣ 📄 main_rag.py        # Script chính cho RAG
+ ┣ 📄 README.md          # Tài liệu hướng dẫn
+ ┣ 📄 requirements.txt   # Danh sách thư viện
+ ┣ 📄 stt_api.py         # API chuyển đổi giọng nói sang văn bản
+ ┗ 📄 tts_api.py         # API chuyển đổi văn bản sang giọng nói
 ```
 
 ## Cài đặt
