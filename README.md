@@ -50,7 +50,7 @@ Chatbot Telegram sử dụng các API xử lý ngôn ngữ tự nhiên, nhận d
 1. Clone repository:
 ```bash
 git clone https://github.com/TrungLee2020/chatbot_MIC.git
-cd telebot
+cd chatbot_MIC
 ```
 
 2. Cài đặt các thư viện cần thiết:
