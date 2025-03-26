@@ -4,7 +4,6 @@ Chatbot Telegram sử dụng các API xử lý ngôn ngữ tự nhiên, nhận d
 
 ## Tính năng
 
-- Trả lời câu hỏi từ cơ sở dữ liệu
 - Phân tích và trả lời từ file PDF
 - Nhận dạng và phản hồi tin nhắn thoại
 - Hỗ trợ gửi câu trả lời bằng giọng nói
@@ -20,7 +19,7 @@ Chatbot Telegram sử dụng các API xử lý ngôn ngữ tự nhiên, nhận d
 
 ### Yêu cầu
 
-- Python 3.8+
+- Python 3.10
 - Telegram Bot Token (từ BotFather)
 - API STT và TTS (đã được cài đặt và chạy)
 
@@ -28,7 +27,7 @@ Chatbot Telegram sử dụng các API xử lý ngôn ngữ tự nhiên, nhận d
 
 1. Clone repository:
 ```bash
-git clone <repository-url>
+git clone https://github.com/TrungLee2020/chatbot_MIC.git
 cd telebot
 ```
 
@@ -50,7 +49,10 @@ TELEGRAM_TOKEN=your_telegram_bot_token_here
 
 5. Khởi động bot:
 ```bash
-python main.py
+python main_rag.py
+python stt_api.py
+python tts_api.py
+python app.py
 ```
 
 ## Sử dụng
