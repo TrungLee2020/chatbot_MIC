@@ -1,10 +1,1 @@
-data
-database
-logs
-src/__pycache__
-src/api/__pycache__
-src/bot/__pycache__
-src/core/__pycache__
-*.pyc
-*.pyo
-*.pyd
+
