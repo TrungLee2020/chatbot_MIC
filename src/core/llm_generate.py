@@ -2,7 +2,7 @@ import aiohttp
 
 from config import LLM_URL, CHATBOT_MODEL, CHATBOT_TEMPERATURE, CHATBOT_MAX_TOKENS
 from src.utils import logger
-from src.bot.Prompts import CHAT_PROMPT, CHROMADB_PROMPT_TEMPLATE
+from src.core.Prompts import CHAT_PROMPT, CHROMADB_PROMPT_TEMPLATE
 
 
 async def generate_answer(
@@ -29,7 +29,7 @@ async def generate_answer(
         # Log ngắn gọn hơn
         if knowledge_context:
             logger.info(f"Knowledge context length: {len(knowledge_context)} chars")
-
+            logger.debug(f"Knowledge context: {knowledge_context}")
         # Chuẩn bị prompt dựa trên template được chọn
         if prompt_template == "chromadb_based":
             formatted_prompt = CHROMADB_PROMPT_TEMPLATE.format(
@@ -80,9 +80,12 @@ async def generate_answer(
                     logger.error(f"LLM API error {response.status}: {error_text[:200]}")
                     return f"Xin lỗi, tôi không thể trả lời câu hỏi của bạn lúc này (Mã lỗi: {response.status})."
 
+
+
     except aiohttp.ClientError as e:
         logger.error(f"API connection error: {str(e)}")
         return "Xin lỗi, tôi không thể kết nối tới dịch vụ AI. Vui lòng thử lại sau."
+
     except Exception as e:
         logger.error(f"Error generating answer: {str(e)}")
         return "Xin lỗi, đã xảy ra lỗi khi xử lý câu hỏi của bạn. Vui lòng thử lại sau."

@@ -8,7 +8,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 from src.utils import setup_logger
 
-logger = setup_logger("modules", "logs/modules.log")
+logger = setup_logger("src", "logs/src.log")
 
 DOCUMENT_LOADERS = {
     'pdf': PyPDFLoader,

@@ -23,7 +23,10 @@ CHATBOT_MAX_TOKENS = int(os.getenv("CHATBOT_MAX_TOKENS", "500"))
 
 # ChromaDB config
 CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", "data/chroma_db")
-EMBEDDINGS_MODEL = os.getenv("EMBEDDINGS_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+EMBEDDINGS_MODEL = os.getenv("EMBEDDINGS_MODEL")
+RERANKER_MODEL = os.getenv("RERANKER_MODEL")
+USE_RERANKER = os.getenv("USE_RERANKER")
+RERANKER_THRESHOLD = float(os.getenv("RERANKER_THRESHOLD"))
 
 # TTS voice config
 TTS_VOICE = os.getenv("TTS_VOICE", "vi-VN-NamMinhNeural")

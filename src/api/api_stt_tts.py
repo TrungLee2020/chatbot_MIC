@@ -27,7 +27,10 @@ async def speech_to_text(audio_path: str, language: str = "vi-VN") -> str:
 
         # Call STT API
         async with aiohttp.ClientSession() as session:
-            async with session.post(STT_API_URL, data=form_data, timeout=30) as response:
+            async with session.post(
+                    STT_API_URL,
+                    data=form_data,
+                    timeout=30) as response:
                 if response.status == 200:
                     result = await response.json()
                     if result.get('success'):
@@ -44,24 +47,31 @@ async def speech_to_text(audio_path: str, language: str = "vi-VN") -> str:
 async def text_to_speech(text: str, voice: str = TTS_VOICE) -> Optional[str]:
     """Convert text to audio using TTS API"""
     try:
+        payload = {'text': text, 'voice': voice}
         # Call API with text payload
         async with aiohttp.ClientSession() as session:
-            async with session.post(TTS_API_URL, json={'text': text, 'voice': voice}, timeout=30) as response:
+            async with session.post(
+                    TTS_API_URL,
+                    json=payload,
+                    timeout=30) as response:
                 if response.status == 200:
                     # Save audio to temporary file
-                    with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as temp_file:
+                    with tempfile.NamedTemporaryFile(
+                            dir="temp_audio", delete=False, suffix='.mp3') as temp_file:
                         temp_file.write(await response.read())
+                        logger.info(f"Saved audio TTS to {temp_file.name}")
                         return temp_file.name
-                logger.error(f"TTS API error: {response.status} - {await response.text()}")
+                logger.error(
+                    f"TTS API error: {response.status} - {await response.text()}"
+                )
                 return None
     except Exception as e:
         logger.error(f"Text-to-speech error: {e}")
         return None
 
+
 async def get_available_voices() -> list:
-    """
-    Get list of available TTS voices
-    """
+    """ Get list of available TTS voices"""
     try:
         # Call TTS API to get voices
         voice_url = f"{TTS_API_URL.rsplit('/', 1)[0]}/voices/vietnamese"

@@ -3,11 +3,14 @@ from chromadb.utils import embedding_functions
 from langchain.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from typing import List, Dict, Any, Tuple, Union
+import logging
 
 from src.utils import setup_logger
-from config import EMBEDDINGS_MODEL
+from config import EMBEDDINGS_MODEL, RERANKER_MODEL
+from src.core.reranker import DocumentReranker
 
-logger = setup_logger("modules", "logs/modules.log")
+logger = setup_logger("src", "logs/src.log")
+
 
 class ChromaDBManager:
     """Quản lý ChromaDB và các thao tác liên quan"""
@@ -21,6 +24,7 @@ class ChromaDBManager:
         self.chroma_client = None
         self.knowledge_collection = None
         self.embedding_function = None
+        self.reranker = None  # Khởi tạo reranker
 
         self.initialize()
 
@@ -33,15 +37,27 @@ class ChromaDBManager:
             self.chroma_client = chromadb.PersistentClient(path=self.db_path)
             logger.info("ChromaDB khởi tạo thành công")
 
-            # Khởi tạo embedding function
+            # Khởi tạo embedding function: embedding_functions.SentenceTransformerEmbeddingFunction
             try:
                 self.embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
-                    model_name=EMBEDDINGS_MODEL
+                    model_name=EMBEDDINGS_MODEL,
+                    trust_remote_code=True,
                 )
                 logger.info("Embedding function khởi tạo thành công")
             except Exception as e:
                 logger.error(f"Lỗi khởi tạo embedding model: {str(e)}")
                 raise
+
+            # Khởi tạo reranker
+            try:
+                # Thử khởi tạo DocumentReranker
+                self.reranker = DocumentReranker(RERANKER_MODEL)
+                if not self.reranker.is_initialized():
+                    raise RuntimeError("DocumentReranker không khởi tạo được")
+                logger.info("Reranker khởi tạo thành công: DocumentReranker")
+            except Exception as e:
+                logger.error(f"Lỗi khởi tạo DocumentReranker: {str(e)}")
+                self.reranker = None
 
             # Tạo hoặc lấy collection
             try:
@@ -68,17 +84,18 @@ class ChromaDBManager:
         """Kiểm tra xem ChromaDB đã được khởi tạo thành công chưa"""
         return self.knowledge_collection is not None
 
-    async def search_documents(self, query: str, limit: int = 3, return_scores: bool = False,
-                               threshold: float = 0.5) -> Union[str, Tuple[str, List[float]]]:
+    async def search_documents(self, query: str, limit: int = 5, return_scores: bool = False,
+                               threshold: float = 0.5, use_reranker: bool = True) -> Union[
+        str, Tuple[str, List[float]]]:
         """
-        Tìm kiếm tài liệu trong ChromaDB
+        Tìm kiếm tài liệu trong ChromaDB và áp dụng reranking nếu cần
         """
         if not self.is_initialized():
             logger.warning("ChromaDB chưa được khởi tạo, bỏ qua tìm kiếm")
             return ("", []) if return_scores else ""
 
-        logger.info(f"Tìm kiếm cho câu truy vấn: '{query}'")
-        logger.info(f"Collection chứa {self.knowledge_collection.count()} tài liệu")
+        # logger.info(f"Tìm kiếm cho câu truy vấn: '{query}'")
+        # logger.info(f"Collection chứa {self.knowledge_collection.count()} tài liệu")
 
         # Nếu collection trống, trả về sớm
         if self.knowledge_collection.count() == 0:
@@ -87,10 +104,12 @@ class ChromaDBManager:
                     []) if return_scores else "Collection trống. Vui lòng thêm tài liệu trước."
 
         try:
-            # Thực hiện tìm kiếm
+            # Thực hiện tìm kiếm ban đầu với số lượng kết quả lớn hơn để reranking
+            initial_limit = min(5, self.knowledge_collection.count()) if use_reranker and self.reranker else limit
+
             results = self.knowledge_collection.query(
                 query_texts=[query],
-                n_results=limit,
+                n_results=initial_limit,
                 include=['documents', 'metadatas', 'distances']
             )
 
@@ -106,26 +125,56 @@ class ChromaDBManager:
             # Chuyển đổi khoảng cách thành điểm tương đồng
             relevance_scores = [1 - dist for dist in distances]
 
-            logger.info(f"Tìm thấy {len(docs)} kết quả với điểm: {relevance_scores}")
+            logger.info(f"Tìm thấy {len(docs)} kết quả ban đầu với điểm: {relevance_scores[:3]}")
 
-            # Lọc kết quả dựa trên ngưỡng
-            filtered_results = [
-                                   (doc, meta, score)
-                                   for doc, meta, score in zip(docs, metadatas, relevance_scores)
-                                   if score >= threshold
-                               ][:limit]
+            # Chuẩn bị dữ liệu cho reranking hoặc lọc trực tiếp
+            document_objects = []
+            for doc, meta, score in zip(docs, metadatas, relevance_scores):
+                if score >= threshold:
+                    document_objects.append({
+                        'document': doc,
+                        'metadata': meta,
+                        'score': score
+                    })
 
-            if not filtered_results:
+            # Nếu không có kết quả thỏa mãn ngưỡng
+            if not document_objects:
                 logger.info(f"Không tìm thấy tài liệu trên ngưỡng {threshold}")
                 return (f"Không tìm thấy tài liệu phù hợp với ngưỡng {threshold}.",
                         []) if return_scores else f"Không tìm thấy tài liệu phù hợp với ngưỡng {threshold}."
 
+            # Áp dụng reranking nếu được bật và reranker khả dụng
+            final_results = []
+            final_scores = []
+
+            if use_reranker and self.reranker and self.reranker.is_initialized():
+                logger.info("Áp dụng reranking cho kết quả")
+                try:
+                    reranked_docs = self.reranker.rerank(query, document_objects, top_n=limit)
+
+                    for doc in reranked_docs:
+                        final_results.append((doc['document'], doc['metadata'], doc['rerank_score']))
+                        final_scores.append(doc['rerank_score'])
+
+                    logger.info(f"Kết quả sau reranking: {len(final_results)} tài liệu, điểm: {final_scores[:3]}")
+                except Exception as rerank_error:
+                    logger.error(f"Lỗi khi reranking: {str(rerank_error)}, sử dụng kết quả gốc")
+                    # Fallback khi reranker gặp lỗi
+                    final_results = [(doc['document'], doc['metadata'], doc['score'])
+                                     for doc in document_objects[:limit]]
+                    final_scores = [doc['score'] for doc in document_objects[:limit]]
+            else:
+                # Sử dụng kết quả ban đầu nếu không dùng reranker
+                final_results = [(doc['document'], doc['metadata'], doc['score'])
+                                 for doc in document_objects[:limit]]
+                final_scores = [doc['score'] for doc in document_objects[:limit]]
+                logger.info(f"Không sử dụng reranking, giữ nguyên {len(final_results)} kết quả")
+
             # Định dạng kết quả
-            formatted_results = self._format_search_results(filtered_results)
-            final_scores = [score for _, _, score in filtered_results]
+            formatted_results = self._format_search_results(final_results)
 
             avg_score = sum(final_scores) / len(final_scores) if final_scores else 0
-            logger.info(f"Tìm thấy {len(filtered_results)} tài liệu với điểm trung bình: {avg_score:.4f}")
+            logger.info(f"Kết quả cuối cùng: {len(final_results)} tài liệu với điểm trung bình: {avg_score:.4f}")
 
             return (formatted_results, final_scores) if return_scores else formatted_results
 

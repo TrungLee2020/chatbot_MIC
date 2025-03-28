@@ -11,7 +11,7 @@ from telegram.ext import (
 from config import TELEGRAM_BOT_TOKEN, LOG_FILE
 
 # Import handlers
-from src.bot.Bot_Manager import TelegramBotHandler
+from src.bot.Bot import TelegramBotHandler
 
 # Import utility for logging
 from src.utils import setup_logger

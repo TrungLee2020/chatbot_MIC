@@ -6,6 +6,7 @@ from typing import List, Dict
 from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 
+from config import CHAT_HISTORY_DB
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
 logger = logging.getLogger(__name__)
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 conversation_history = {}
 
 class ChatHistoryManager:
-    def __init__(self, db_path: str = "database/chat_history.db", max_history: int = 5):
+    def __init__(self, db_path: str = CHAT_HISTORY_DB, max_history: int = 5):
         self.db_path = db_path
         self.max_history = max_history
         

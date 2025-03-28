@@ -1,5 +1,4 @@
 import os
-import logging
 import tempfile
 import time
 
@@ -9,22 +8,26 @@ from telegram.ext import ContextTypes
 from telegram.constants import ChatAction
 
 from config import MAX_HISTORY_ENTRIES, RELEVANCE_THRESHOLD
+from config import USE_RERANKER
+
 from src.api.api_stt_tts import speech_to_text, text_to_speech
+
 from src.core.chroma_handler import process_pdf, search_documents
 from src.core.llm_generate import generate_answer
-from src.core.core_shop import rag_query, execute_query
+
 from src.manager.Chat_History_Manager import ChatHistoryManager
+
 from src.utils import setup_logger
 
+logger = setup_logger("src", "logs/src.log")
 
-logger = setup_logger("modules", "logs/modules.log")
-
-# Import chat hítory
+# Import chat history
 chat_history_manager = ChatHistoryManager()
+
 
 class TelegramBotHandler:
     """
-    Class to handle Telegram bot functionality and message document_processing
+    Class to handle Telegram bot functionality and message processing
     """
 
     def __init__(self, max_history: int = MAX_HISTORY_ENTRIES):
@@ -32,7 +35,7 @@ class TelegramBotHandler:
         Initialize the TelegramBotHandler
         """
         # Initialize logger
-        self.logger = logging.getLogger(__name__)
+        self.logger = logger
 
         # Initialize chat history manager
         self.chat_history_manager = ChatHistoryManager(max_history=max_history)
@@ -58,78 +61,63 @@ class TelegramBotHandler:
             # Đăng ký log để debug
             self.logger.info(f"Processing query: '{query_text}'")
 
-            # Step 1: Search ChromaDB for relevant information and get scores
-            # Không lọc trong hàm search_documents (threshold=0.0), để lấy tất cả kết quả
-            chroma_results, relevance_scores = await search_documents(query_text, return_scores=True)
+            # Step 1: Search ChromaDB for relevant information
+            # Sử dụng reranker
+            chroma_results, relevance_scores = await search_documents(
+                query_text,
+                limit=5,
+                return_scores=True,
+                threshold=0.4,  # Lấy tất cả kết quả trước khi phân tích
+                use_reranker=USE_RERANKER
+            )
             self.logger.info(f"ChromaDB search completed in {time.time() - start_time:.2f} seconds")
+            if USE_RERANKER:
+                self.logger.info(f"Results reranked with scores: {relevance_scores[:3] if relevance_scores else []}")
+            else:
+                self.logger.info(f"Results retrieved with scores: {relevance_scores[:3] if relevance_scores else []}")
 
-            # Step 2: Determine which data source to use based on ChromaDB scores
-            query_result = ""
-            use_sql = self._determine_data_source(relevance_scores)
-
-            # Get chat history for context in either case
-            chat_history = self.chat_history_manager.get_chat_history(chat_id, limit=1)
-            # check history và câu hỏi mới co tuong quan voi nhau khong
+            # Get chat history for context
+            chat_history = self.chat_history_manager.get_chat_history(chat_id, limit=3)
+            # Check history và câu hỏi mới có tương quan với nhau không
             relevant_history = self.chat_history_manager.filter_relevant_history(query_text, chat_history)
 
+            # Format conversation context
             context_str = self._format_chat_history(relevant_history)
 
-            # Execute SQL query if needed
-            if use_sql:
-                self.logger.info("Generating SQL RAG query")
-                sql_query = rag_query(query_text, chat_history)
-
-                if sql_query:
-                    from config import DB_NAME
-                    query_result = execute_query(DB_NAME, sql_query)
-                    self.logger.info(f"SQL query executed, result size: {len(query_result)}")
-
-            # Step 3: Format conversation context
-            if chat_history:
-                history_entries = list(reversed(chat_history))
-                context_str = self._format_chat_history(history_entries)
-
             # Thêm log để gỡ lỗi
-            self.logger.info(f"Using {'SQL' if use_sql else 'ChromaDB'} as data source")
+            self.logger.info(f"Using ChromaDB as data source")
             if chroma_results:
                 self.logger.info(f"ChromaDB results length: {len(chroma_results.strip())}")
+                # Thêm log phân tích mức độ phù hợp của kết quả
+                if relevance_scores:
+                    avg_score = sum(relevance_scores) / len(relevance_scores)
+                    self.logger.info(f"Average relevance score: {avg_score:.4f}")
+                    if USE_RERANKER:
+                        self.logger.info(f"Reranking improved context relevance")
 
-            # Step 4: Generate the final answer with the appropriate prompt template
-            prompt_template = "sql_based" if use_sql else "chromadb_based"
+            # Generate the final answer with the appropriate prompt template
             answer = await generate_answer(
                 query_text,
                 context_str,
-                query_result,
-                chroma_results,
-                prompt_template=prompt_template
+                db_data="",  # Không sử dụng kết quả từ SQL
+                chroma_data=chroma_results,
+                prompt_template="chromadb_based"
             )
 
-            # Step 5: Save to chat history
+            # Save to chat history
             self.chat_history_manager.add_conversation(chat_id, query_text, answer)
 
-            # Step 6: Send voice response if requested
+            # Send voice response if requested
             if voice_response:
                 await self._send_voice_response(answer, update, context, chat_id)
 
-            # Step 7: Send text response
+            # Send text response
             await self._send_text_response(answer, update, context, chat_id)
 
-            self.logger.info(f"Total document_processing time: {time.time() - start_time:.2f} seconds")
+            self.logger.info(f"Total processing time: {time.time() - start_time:.2f} seconds")
 
         except Exception as e:
             await self._handle_processing_error(e, chat_id, query_text, update, context)
-
-    def _determine_data_source(self, relevance_scores: List[float]) -> bool:
-        """
-        Determine whether to use SQL or ChromaDB based on relevance scores
-        """
-        if relevance_scores:
-            avg_score = sum(relevance_scores) / len(relevance_scores)
-            dynamic_threshold = max(0.15, avg_score * 0.8)  # Adjust based on data
-            return max(relevance_scores) < dynamic_threshold
-        else:
-            self.logger.info("No ChromaDB results, using SQL")
-            return True
 
     def _format_chat_history(self, history_entries: List[Dict[str, Any]]) -> str:
         """
@@ -171,9 +159,9 @@ class TelegramBotHandler:
         Send text response to the user
         """
         if update:
-            await update.message.reply_text(answer)
+            await update.message.reply_text(answer, parse_mode='markdown')
         else:
-            await context.bot.send_message(chat_id=chat_id, text=answer)
+            await context.bot.send_message(chat_id=chat_id, text=answer, parse_mode='markdown')
 
     async def _handle_processing_error(
             self,
@@ -184,9 +172,9 @@ class TelegramBotHandler:
             context: ContextTypes.DEFAULT_TYPE
     ) -> None:
         """
-        Handle document_processing errors
+        Handle processing errors
         """
-        self.logger.error(f"Error document_processing message: {str(error)}")
+        self.logger.error(f"Error processing message: {str(error)}")
         error_message = f"Xin lỗi, đã xảy ra lỗi trong quá trình xử lý tin nhắn của bạn."
 
         # Try to save conversation with error
@@ -248,7 +236,7 @@ class TelegramBotHandler:
             await update.message.reply_text("Vui lòng gửi file PDF.")
             return
 
-        # Notify user we're document_processing
+        # Notify user we're processing
         await update.message.reply_text("Đang xử lý file PDF của bạn...")
         await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
 
@@ -268,7 +256,7 @@ class TelegramBotHandler:
             # Send response
             await update.message.reply_text(result)
         except Exception as e:
-            self.logger.error(f"Error document_processing PDF: {str(e)}")
+            self.logger.error(f"Error processing PDF: {str(e)}")
             await update.message.reply_text(f"Lỗi khi xử lý file PDF: {str(e)}")
         finally:
             # Clean up temp file
@@ -311,7 +299,6 @@ class TelegramBotHandler:
         """
         help_text = (
             "👋 Xin chào! Tôi là trợ lý trả lời câu hỏi cho bạn. Tôi có thể:\n\n"
-            "🔍 Trả lời câu hỏi từ cơ sở dữ liệu\n"
             "📄 Trích xuất thông tin từ file PDF bạn gửi\n"
             "🔊 Hiểu và trả lời tin nhắn thoại\n\n"
             "Các lệnh hỗ trợ:\n"

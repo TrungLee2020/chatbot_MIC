@@ -10,8 +10,13 @@ from logging.handlers import RotatingFileHandler
 logger = logging.getLogger(__name__)
 
 
-def setup_logger(name: str, log_file: str, level=logging.INFO, max_bytes=5 * 1024 * 1024,
-                 backup_count=1) -> logging.Logger:
+def setup_logger(
+    name: str,
+    log_file: str,
+    level=logging.INFO,
+    max_bytes=5 * 1024 * 1024,
+    backup_count=1,
+) -> logging.Logger:
     """
     Set up a logger with rotating file handler and console handler
     Args:
@@ -37,17 +42,18 @@ def setup_logger(name: str, log_file: str, level=logging.INFO, max_bytes=5 * 102
         logger.handlers.clear()
 
     # Create handlers
-    from logging.handlers import RotatingFileHandler
     file_handler = RotatingFileHandler(
         log_file,
         maxBytes=max_bytes,
         backupCount=backup_count,
-        encoding='utf-8'
+        encoding="utf-8"
     )
     console_handler = logging.StreamHandler()
 
     # Create formatter
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
 
     # Set formatter
     file_handler.setFormatter(formatter)
@@ -73,7 +79,9 @@ def extract_image_urls(text: str) -> List[str]:
     import re
 
     # Pattern to match URLs ending with image extensions
-    pattern = r'https?://\S+\.(jpg|jpeg|png|gif|bmp|webp)'
+    pattern = (
+        r"https?://\S+\.(jpg|jpeg|png|gif|bmp|webp)"
+    )
 
     # Find all matches
     urls = re.findall(pattern, text, re.IGNORECASE)
@@ -93,25 +101,30 @@ async def download_image(url: str) -> Optional[str]:
     """
     try:
         # Create a temporary file
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp_file:
+        with tempfile.NamedTemporaryFile(
+                delete=False, suffix=".jpg") as temp_file:
             image_path = temp_file.name
 
         # Download image
         async with aiohttp.ClientSession() as session:
             async with session.get(url, timeout=10) as response:
                 if response.status == 200:
-                    with open(image_path, 'wb') as f:
+                    with open(image_path, "wb") as f:
                         f.write(await response.read())
                     return image_path
                 else:
-                    logger.error(f"Failed to download image, status: {response.status}")
+                    logger.error(
+                        f"Failed to download image, status: {response.status}")
                     return None
     except Exception as e:
         logger.error(f"Error downloading image: {str(e)}")
         return None
 
 
-async def send_media_group(image_urls: List[str], chat_id: int, token: str) -> bool:
+async def send_media_group(
+        image_urls: List[str],
+        chat_id: int,
+        token: str) -> bool:
     """
     Send a group of images to a Telegram chat
 
@@ -142,8 +155,7 @@ async def send_media_group(image_urls: List[str], chat_id: int, token: str) -> b
         from telegram import InputMediaPhoto
 
         media_group = [
-            InputMediaPhoto(open(img_path, 'rb'))
-            for img_path in local_images
+            InputMediaPhoto(open(img_path, "rb")) for img_path in local_images
         ]
 
         await bot.send_media_group(chat_id=chat_id, media=media_group)
@@ -186,8 +198,12 @@ def clean_temp_files(directory: str = None, max_age: int = 3600) -> int:
 
             # Check if it's a file
             if os.path.isfile(file_path):
-                # Check if it's a temp file from our app (e.g., .mp3, .ogg, .pdf)
-                if any(file_path.endswith(ext) for ext in ['.mp3', '.ogg', '.pdf', '.wav']):
+                # Check if it's a temp file
+                # from our app (e.g., .mp3, .ogg, .pdf)
+                if any(
+                    file_path.endswith(ext)
+                    for ext in [".mp3", ".ogg", ".pdf", ".wav"]
+                ):
                     # Check file age
                     file_age = current_time - os.path.getmtime(file_path)
 

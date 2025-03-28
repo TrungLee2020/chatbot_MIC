@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # Đường dẫn đến ChromaDB
-CHROMA_DB_PATH = "../../data/chroma_db"
+CHROMA_DB_PATH = "data/chroma_db"
 
 # Khởi tạo ChromaDB
 try:
@@ -19,9 +19,11 @@ try:
     chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
     logger.info("ChromaDB client initialized successfully")
 
-    # Khởi tạo embedding function
+    # Khởi tạo embedding function: sentence-transformers/all-MiniLM-L6-v2
+    # Alibaba-NLP/gte-multilingual-base
     embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
+        model_name="Alibaba-NLP/gte-multilingual-base",
+        trust_remote_code=True
     )
     logger.info("Embedding function initialized successfully")
 
